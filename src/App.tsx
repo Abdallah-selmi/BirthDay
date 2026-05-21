@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LandingPage } from './components/LandingPage';
@@ -7,6 +7,7 @@ import { PageTransition } from './components/PageTransition';
 import { useRomanticAudio } from './hooks/useRomanticAudio';
 import { useEscapeButton } from './hooks/useEscapeButton';
 import { useCursorTrail } from './hooks/useCursorTrail';
+import { useResponsive } from './hooks/useResponsive';
 import type { PageState } from './utils/constants';
 import { playHeartbeatSound, playSparkleSound } from './utils/audio';
 import { spawnConfetti } from './utils/particles';
@@ -14,9 +15,35 @@ import { spawnConfetti } from './utils/particles';
 export default function App() {
   const [page, setPage] = useState<PageState>('loading');
   const [sessionKey, setSessionKey] = useState(0);
+  const responsive = useResponsive();
   const audio = useRomanticAudio();
-  const escape = useEscapeButton(page === 'landing');
-  useCursorTrail(page === 'landing');
+
+  const escapeConfig = useMemo(
+    () => ({
+      proximityThreshold: responsive.proximityThreshold,
+      escapeDistanceMin: responsive.escapeDistanceMin,
+      escapeDistanceMax: responsive.escapeDistanceMax,
+      safePadding: responsive.safePadding,
+      isTouch: responsive.isTouch,
+    }),
+    [
+      responsive.proximityThreshold,
+      responsive.escapeDistanceMin,
+      responsive.escapeDistanceMax,
+      responsive.safePadding,
+      responsive.isTouch,
+    ]
+  );
+
+  const escape = useEscapeButton({
+    enabled: page === 'landing',
+    config: escapeConfig,
+  });
+
+  useCursorTrail({
+    active: page === 'landing',
+    enabled: !responsive.isTouch && !responsive.isReducedMotion && !responsive.isLowPower,
+  });
 
   useEffect(() => {
     if (page !== 'loading') return;
@@ -34,14 +61,14 @@ export default function App() {
     setTimeout(() => {
       playSparkleSound();
       setPage('transition');
-      const cleanupConfetti = spawnConfetti(70);
+      const cleanupConfetti = spawnConfetti(responsive.counts.confetti);
 
       setTimeout(() => {
         setPage('celebration');
         setTimeout(cleanupConfetti, 4000);
       }, 1200);
     }, 400);
-  }, [escape.catchable]);
+  }, [escape.catchable, responsive.counts.confetti]);
 
   const handleRelive = useCallback(() => {
     playSparkleSound();
@@ -69,6 +96,9 @@ export default function App() {
             onCaught={handleCaught}
             screenShake={escape.screenShake}
             escape={escape}
+            counts={responsive.counts}
+            particleScale={responsive.particleScale}
+            isReducedMotion={responsive.isReducedMotion}
           />
         )}
 
@@ -80,6 +110,9 @@ export default function App() {
             playing={audio.playing}
             onToggleMusic={handleToggleMusic}
             onRelive={handleRelive}
+            counts={responsive.counts}
+            particleScale={responsive.particleScale}
+            isReducedMotion={responsive.isReducedMotion}
           />
         )}
       </AnimatePresence>

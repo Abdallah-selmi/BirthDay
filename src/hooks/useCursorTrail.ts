@@ -1,27 +1,39 @@
 import { useEffect, useRef } from 'react';
+import { throttleRaf } from '../utils/breakpoints';
 
-export function useCursorTrail(active: boolean) {
+interface UseCursorTrailOptions {
+  active: boolean;
+  enabled: boolean;
+}
+
+export function useCursorTrail({ active, enabled }: UseCursorTrailOptions) {
   const lastSpawn = useRef(0);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !enabled) return;
 
-    const onMove = (e: PointerEvent) => {
+    const spawn = throttleRaf((clientX: number, clientY: number) => {
       const now = Date.now();
-      if (now - lastSpawn.current < 80) return;
+      const interval = 100;
+      if (now - lastSpawn.current < interval) return;
       lastSpawn.current = now;
 
       const heart = document.createElement('span');
       heart.className = 'cursor-trail';
       heart.textContent = Math.random() > 0.5 ? '❤️' : '✨';
-      heart.style.left = `${e.clientX}px`;
-      heart.style.top = `${e.clientY}px`;
+      heart.style.left = `${clientX}px`;
+      heart.style.top = `${clientY}px`;
       heart.style.setProperty('--rot', `${Math.random() * 360}deg`);
       document.body.appendChild(heart);
       setTimeout(() => heart.remove(), 900);
+    });
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return;
+      spawn(e.clientX, e.clientY);
     };
 
     window.addEventListener('pointermove', onMove, { passive: true });
     return () => window.removeEventListener('pointermove', onMove);
-  }, [active]);
+  }, [active, enabled]);
 }

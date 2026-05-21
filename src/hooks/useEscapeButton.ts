@@ -1,18 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  PROXIMITY_THRESHOLD,
   computeEscapePosition,
   distance,
   getInitialButtonPosition,
   getRectCenter,
+  clampPosition,
   type Point,
+  type EscapeOptions,
 } from '../utils/geometry';
 import { ESCAPE_MESSAGES, MAX_ESCAPES } from '../utils/constants';
 import { playClickSound } from '../utils/audio';
+import { throttleRaf, type ResponsiveConfig } from '../utils/breakpoints';
 
 const ESCAPE_COOLDOWN_MS = 450;
 
-export function useEscapeButton(enabled: boolean) {
+interface UseEscapeButtonOptions {
+  enabled: boolean;
+  config: Pick<
+    ResponsiveConfig,
+    | 'proximityThreshold'
+    | 'escapeDistanceMin'
+    | 'escapeDistanceMax'
+    | 'safePadding'
+    | 'isTouch'
+  >;
+}
+
+export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
   const [escapeCount, setEscapeCount] = useState(0);
@@ -20,36 +34,50 @@ export function useEscapeButton(enabled: boolean) {
   const [teaseMsg, setTeaseMsg] = useState('');
   const [screenShake, setScreenShake] = useState(false);
   const lastEscapeRef = useRef(0);
-  const initializedRef = useRef(false);
   const teaseTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  const escapeOpts = useCallback((): EscapeOptions => ({
+    escapeDistanceMin: configRef.current.escapeDistanceMin,
+    escapeDistanceMax: configRef.current.escapeDistanceMax,
+    safePadding: configRef.current.safePadding,
+  }), []);
 
   const initPosition = useCallback(() => {
     const el = buttonRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const w = rect.width || 160;
-    const h = rect.height || 52;
-    setPosition(getInitialButtonPosition(w, h));
-    initializedRef.current = true;
+    const w = rect.width || 150;
+    const h = rect.height || 48;
+    setPosition(
+      getInitialButtonPosition(w, h, configRef.current.safePadding)
+    );
+  }, []);
+
+  const clampCurrentPosition = useCallback(() => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPosition((prev) =>
+      clampPosition(prev.x, prev.y, rect.width, rect.height, configRef.current.safePadding)
+    );
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
     const t = requestAnimationFrame(() => initPosition());
-    const onResize = () => {
-      setPosition((prev) => {
-        const el = buttonRef.current;
-        if (!el) return prev;
-        const rect = el.getBoundingClientRect();
-        return getInitialButtonPosition(rect.width, rect.height);
-      });
-    };
+
+    const onResize = throttleRaf(() => clampCurrentPosition());
     window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+
     return () => {
       cancelAnimationFrame(t);
       window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
     };
-  }, [enabled, initPosition]);
+  }, [enabled, initPosition, clampCurrentPosition]);
 
   const showTease = useCallback((msg: string) => {
     if (teaseTimeoutRef.current) clearTimeout(teaseTimeoutRef.current);
@@ -67,12 +95,14 @@ export function useEscapeButton(enabled: boolean) {
 
       const rect = el.getBoundingClientRect();
       const center = getRectCenter(rect);
-      if (distance(cursor, center) >= PROXIMITY_THRESHOLD) return;
+      const threshold = configRef.current.proximityThreshold;
+
+      if (distance(cursor, center) >= threshold) return;
 
       lastEscapeRef.current = now;
       const nextCount = escapeCount + 1;
       setEscapeCount(nextCount);
-      setPosition(computeEscapePosition(cursor, rect));
+      setPosition(computeEscapePosition(cursor, rect, escapeOpts()));
       showTease(ESCAPE_MESSAGES[nextCount - 1] ?? '');
       playClickSound();
 
@@ -82,19 +112,43 @@ export function useEscapeButton(enabled: boolean) {
         setTimeout(() => setScreenShake(false), 600);
       }
     },
-    [catchable, escapeCount, showTease]
+    [catchable, escapeCount, showTease, escapeOpts]
+  );
+
+  const onPointer = useCallback(
+    throttleRaf((clientX: number, clientY: number) => {
+      triggerEscape({ x: clientX, y: clientY });
+    }),
+    [triggerEscape]
   );
 
   useEffect(() => {
     if (!enabled || catchable) return;
 
     const onPointerMove = (e: PointerEvent) => {
-      triggerEscape({ x: e.clientX, y: e.clientY });
+      onPointer(e.clientX, e.clientY);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) onPointer(touch.clientX, touch.clientY);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) onPointer(touch.clientX, touch.clientY);
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
-    return () => window.removeEventListener('pointermove', onPointerMove);
-  }, [enabled, catchable, triggerEscape]);
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [enabled, catchable, onPointer]);
 
   const reset = useCallback(() => {
     setEscapeCount(0);
@@ -102,7 +156,6 @@ export function useEscapeButton(enabled: boolean) {
     setTeaseMsg('');
     setScreenShake(false);
     lastEscapeRef.current = 0;
-    initializedRef.current = false;
     requestAnimationFrame(() => initPosition());
   }, [initPosition]);
 

@@ -6,6 +6,8 @@ interface AmbientSceneProps {
   particles: FloatingItem[];
   variant?: 'landing' | 'celebration';
   parallax?: number;
+  particleScale?: number;
+  reducedMotion?: boolean;
 }
 
 export function AmbientScene({
@@ -13,18 +15,25 @@ export function AmbientScene({
   particles,
   variant = 'landing',
   parallax = 0,
+  particleScale = 1,
+  reducedMotion = false,
 }: AmbientSceneProps) {
+  const heartBase = variant === 'celebration' ? 28 : 22;
+  const heartSize = heartBase * particleScale;
+
   return (
     <>
       <div className="ambient-vignette" aria-hidden />
       <div className="ambient-light ambient-light--left" aria-hidden />
       <div className="ambient-light ambient-light--right" aria-hidden />
-      <motion.div
-        className="ambient-blur-layer"
-        aria-hidden
-        animate={{ x: parallax * 0.3, y: parallax * 0.15 }}
-        transition={{ type: 'spring', stiffness: 50, damping: 20 }}
-      />
+      {!reducedMotion && (
+        <motion.div
+          className="ambient-blur-layer"
+          aria-hidden
+          animate={{ x: parallax * 0.3, y: parallax * 0.15 }}
+          transition={{ type: 'spring', stiffness: 50, damping: 20 }}
+        />
+      )}
 
       <div className="particles-container">
         {particles.map((p) => (
@@ -36,7 +45,7 @@ export function AmbientScene({
               top: `${p.top ?? 0}%`,
               animationDelay: `${p.delay}s`,
               opacity: p.opacity,
-              transform: `scale(${p.size ?? 1})`,
+              transform: `scale(${(p.size ?? 1) * particleScale})`,
             }}
           />
         ))}
@@ -49,9 +58,9 @@ export function AmbientScene({
             className={variant === 'celebration' ? 'rose-petal' : 'floating-heart'}
             style={{
               left: `${h.left}%`,
-              animationDuration: `${h.duration}s`,
+              animationDuration: reducedMotion ? '0.01s' : `${h.duration}s`,
               animationDelay: `${h.delay}s`,
-              fontSize: variant === 'celebration' ? `${28 + (h.size ?? 1) * 16}px` : undefined,
+              fontSize: `${heartSize + (h.size ?? 1) * (variant === 'celebration' ? 12 : 8)}px`,
             }}
           >
             {variant === 'celebration' ? '🌹' : '❤️'}

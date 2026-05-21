@@ -4,10 +4,13 @@ export const ESCAPE_MESSAGES = [
   'Nooo 😜',
   'Catch me first ❤️',
   'Almost there 👀',
+  'Still running! 🏃‍♀️',
+  'You are so close 💫',
   'One last try my love 💕',
 ] as const;
 
-export const MAX_ESCAPES = 4;
+/** Proximity escapes before the button becomes catchable (7th = click to win) */
+export const MAX_ESCAPES = 6;
 
 export const LOVE_LINES = [
   'You are the most beautiful thing that ever happened to me.',

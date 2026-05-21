@@ -11,7 +11,7 @@ interface TypewriterLinesProps {
 export function TypewriterLines({
   lines,
   startDelay = 1200,
-  charDelay = 35,
+  charDelay = 35, // pass 0 for instant lines when reduced motion
   linePause = 400,
 }: TypewriterLinesProps) {
   const [lineIndex, setLineIndex] = useState(0);
@@ -24,7 +24,13 @@ export function TypewriterLines({
   }, [startDelay]);
 
   useEffect(() => {
-    if (!started || lineIndex >= lines.length) return;
+    if (!started) return;
+    if (charDelay === 0) {
+      setLineIndex(lines.length);
+      setCharIndex(999);
+      return;
+    }
+    if (lineIndex >= lines.length) return;
 
     const current = lines[lineIndex];
     if (charIndex < current.length) {
