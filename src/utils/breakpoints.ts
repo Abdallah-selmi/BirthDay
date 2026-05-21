@@ -74,17 +74,17 @@ export function getViewportMetrics(): ViewportMetrics {
 }
 
 export function getProximityThreshold(width: number): number {
-  if (width < BREAKPOINTS.sm) return 90;
-  if (width < BREAKPOINTS.md) return 100;
-  if (width < BREAKPOINTS.lg) return 110;
-  return 120;
+  if (width < BREAKPOINTS.sm) return 110;
+  if (width < BREAKPOINTS.md) return 125;
+  if (width < BREAKPOINTS.lg) return 140;
+  return 155;
 }
 
 export function getEscapeDistance(width: number): { min: number; max: number } {
-  const scale = Math.min(1, width / BREAKPOINTS.lg);
+  const scale = Math.min(1.2, width / BREAKPOINTS.lg);
   return {
-    min: 80 + scale * 50,
-    max: 120 + scale * 80,
+    min: 150 + scale * 80,
+    max: 260 + scale * 140,
   };
 }
 

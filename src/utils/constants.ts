@@ -20,4 +20,11 @@ export const LOVE_LINES = [
 ] as const;
 
 export const springBouncy = { type: 'spring' as const, stiffness: 380, damping: 22, mass: 0.8 };
+/** Snappy dash — feels like an arcade chase */
+export const springEscape = {
+  type: 'spring' as const,
+  stiffness: 620,
+  damping: 28,
+  mass: 0.65,
+};
 export const springSoft = { type: 'spring' as const, stiffness: 120, damping: 18, mass: 1 };

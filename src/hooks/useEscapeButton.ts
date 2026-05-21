@@ -12,7 +12,8 @@ import { ESCAPE_MESSAGES, MAX_ESCAPES } from '../utils/constants';
 import { playClickSound } from '../utils/audio';
 import { throttleRaf, type ResponsiveConfig } from '../utils/breakpoints';
 
-const ESCAPE_COOLDOWN_MS = 450;
+/** After escape, cursor must leave this zone before next escape (game hysteresis) */
+const LEAVE_ZONE_MULTIPLIER = 1.75;
 
 interface UseEscapeButtonOptions {
   enabled: boolean;
@@ -30,19 +31,31 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState<Point>({ x: 0, y: 0 });
   const [escapeCount, setEscapeCount] = useState(0);
+  const [dashKey, setDashKey] = useState(0);
   const [catchable, setCatchable] = useState(false);
   const [teaseMsg, setTeaseMsg] = useState('');
   const [screenShake, setScreenShake] = useState(false);
-  const lastEscapeRef = useRef(0);
-  const teaseTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const positionRef = useRef(position);
+  positionRef.current = position;
+
+  const escapeCountRef = useRef(0);
+  const catchableRef = useRef(false);
+  const armedRef = useRef(true);
   const configRef = useRef(config);
   configRef.current = config;
 
-  const escapeOpts = useCallback((): EscapeOptions => ({
-    escapeDistanceMin: configRef.current.escapeDistanceMin,
-    escapeDistanceMax: configRef.current.escapeDistanceMax,
-    safePadding: configRef.current.safePadding,
-  }), []);
+  const teaseTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const escapeOpts = useCallback(
+    (attempt: number): EscapeOptions => ({
+      escapeDistanceMin: configRef.current.escapeDistanceMin,
+      escapeDistanceMax: configRef.current.escapeDistanceMax,
+      safePadding: configRef.current.safePadding,
+      escapeAttempt: attempt,
+    }),
+    []
+  );
 
   const initPosition = useCallback(() => {
     const el = buttonRef.current;
@@ -50,18 +63,24 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
     const rect = el.getBoundingClientRect();
     const w = rect.width || 150;
     const h = rect.height || 48;
-    setPosition(
-      getInitialButtonPosition(w, h, configRef.current.safePadding)
-    );
+    const pos = getInitialButtonPosition(w, h, configRef.current.safePadding);
+    positionRef.current = pos;
+    setPosition(pos);
   }, []);
 
   const clampCurrentPosition = useCallback(() => {
     const el = buttonRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    setPosition((prev) =>
-      clampPosition(prev.x, prev.y, rect.width, rect.height, configRef.current.safePadding)
+    const pos = clampPosition(
+      positionRef.current.x,
+      positionRef.current.y,
+      rect.width,
+      rect.height,
+      configRef.current.safePadding
     );
+    positionRef.current = pos;
+    setPosition(pos);
   }, []);
 
   useEffect(() => {
@@ -85,58 +104,69 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
     teaseTimeoutRef.current = setTimeout(() => setTeaseMsg(''), 1600);
   }, []);
 
-  const triggerEscape = useCallback(
-    (cursor: Point) => {
-      const el = buttonRef.current;
-      if (!el || catchable || escapeCount >= MAX_ESCAPES) return;
+  const triggerEscape = useCallback((cursor: Point) => {
+    const el = buttonRef.current;
+    if (!el || catchableRef.current || escapeCountRef.current >= MAX_ESCAPES) {
+      return;
+    }
 
-      const now = Date.now();
-      if (now - lastEscapeRef.current < ESCAPE_COOLDOWN_MS) return;
+    const rect = el.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const center = getRectCenter(rect);
+    const threshold = configRef.current.proximityThreshold;
+    const dist = distance(cursor, center);
 
-      const rect = el.getBoundingClientRect();
-      const center = getRectCenter(rect);
-      const threshold = configRef.current.proximityThreshold;
+    // Réarmer quand le curseur/doigt s'éloigne assez
+    if (dist > threshold * LEAVE_ZONE_MULTIPLIER) {
+      armedRef.current = true;
+      return;
+    }
 
-      if (distance(cursor, center) >= threshold) return;
+    if (!armedRef.current || dist >= threshold) return;
 
-      lastEscapeRef.current = now;
-      const nextCount = escapeCount + 1;
-      setEscapeCount(nextCount);
-      setPosition(computeEscapePosition(cursor, rect, escapeOpts()));
-      showTease(ESCAPE_MESSAGES[nextCount - 1] ?? '');
-      playClickSound();
+    armedRef.current = false;
+    const nextCount = escapeCountRef.current + 1;
+    escapeCountRef.current = nextCount;
 
-      if (nextCount >= MAX_ESCAPES) {
-        setCatchable(true);
-        setScreenShake(true);
-        setTimeout(() => setScreenShake(false), 600);
-      }
-    },
-    [catchable, escapeCount, showTease, escapeOpts]
-  );
+    const newPos = computeEscapePosition(
+      cursor,
+      positionRef.current,
+      w,
+      h,
+      escapeOpts(nextCount)
+    );
 
-  const onPointer = useCallback(
-    throttleRaf((clientX: number, clientY: number) => {
-      triggerEscape({ x: clientX, y: clientY });
-    }),
-    [triggerEscape]
-  );
+    positionRef.current = newPos;
+    setPosition(newPos);
+    setEscapeCount(nextCount);
+    setDashKey((k) => k + 1);
+    showTease(ESCAPE_MESSAGES[nextCount - 1] ?? '');
+    playClickSound();
+
+    if (nextCount >= MAX_ESCAPES) {
+      catchableRef.current = true;
+      setCatchable(true);
+      setScreenShake(true);
+      setTimeout(() => setScreenShake(false), 600);
+    }
+  }, [showTease, escapeOpts]);
 
   useEffect(() => {
     if (!enabled || catchable) return;
 
     const onPointerMove = (e: PointerEvent) => {
-      onPointer(e.clientX, e.clientY);
+      triggerEscape({ x: e.clientX, y: e.clientY });
     };
 
     const onTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0];
-      if (touch) onPointer(touch.clientX, touch.clientY);
+      if (touch) triggerEscape({ x: touch.clientX, y: touch.clientY });
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];
-      if (touch) onPointer(touch.clientX, touch.clientY);
+      if (touch) triggerEscape({ x: touch.clientX, y: touch.clientY });
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -148,16 +178,23 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
     };
-  }, [enabled, catchable, onPointer]);
+  }, [enabled, catchable, triggerEscape]);
 
   const reset = useCallback(() => {
+    escapeCountRef.current = 0;
+    catchableRef.current = false;
+    armedRef.current = true;
     setEscapeCount(0);
     setCatchable(false);
     setTeaseMsg('');
     setScreenShake(false);
-    lastEscapeRef.current = 0;
+    setDashKey(0);
     requestAnimationFrame(() => initPosition());
   }, [initPosition]);
+
+  useEffect(() => {
+    catchableRef.current = catchable;
+  }, [catchable]);
 
   useEffect(() => {
     return () => {
@@ -169,6 +206,7 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
     buttonRef,
     position,
     escapeCount,
+    dashKey,
     catchable,
     teaseMsg,
     screenShake,

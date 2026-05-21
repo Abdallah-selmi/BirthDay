@@ -10,18 +10,13 @@ export interface Point {
   y: number;
 }
 
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export interface EscapeOptions {
   proximityThreshold?: number;
   escapeDistanceMin?: number;
   escapeDistanceMax?: number;
   safePadding?: number;
+  /** 1-based escape attempt — each jump goes farther */
+  escapeAttempt?: number;
 }
 
 export function distance(a: Point, b: Point): number {
@@ -42,6 +37,10 @@ function getLayoutBounds(padding: number) {
     minY: offsetTop + padding,
     maxX: offsetLeft + width - padding,
     maxY: offsetTop + height - padding,
+    width,
+    height,
+    offsetTop,
+    offsetLeft,
   };
 }
 
@@ -64,31 +63,78 @@ export function clampPosition(
   };
 }
 
-/** Smart escape: place button away from cursor, inside viewport + safe areas */
+function centerFromTopLeft(pos: Point, w: number, h: number): Point {
+  return { x: pos.x + w / 2, y: pos.y + h / 2 };
+}
+
+/** Game-like escape: big jump, always far from cursor, prefers opposite side of screen */
 export function computeEscapePosition(
   cursor: Point,
-  buttonRect: DOMRect,
+  currentTopLeft: Point,
+  btnWidth: number,
+  btnHeight: number,
   options: EscapeOptions = {}
 ): Point {
-  const vw = getViewportMetrics().width;
+  const bounds = getLayoutBounds(options.safePadding ?? getSafePadding(getViewportMetrics().width));
+  const vw = bounds.width;
+  const vh = bounds.height;
   const { min: defaultMin, max: defaultMax } = getEscapeDistance(vw);
 
-  const escapeMin = options.escapeDistanceMin ?? defaultMin;
-  const escapeMax = options.escapeDistanceMax ?? defaultMax;
-  const padding = options.safePadding ?? getSafePadding(vw);
+  const attempt = options.escapeAttempt ?? 1;
+  const attemptBoost = (attempt - 1) * 35;
+  const escapeMin = (options.escapeDistanceMin ?? defaultMin) + attemptBoost;
+  const escapeMax = (options.escapeDistanceMax ?? defaultMax) + attemptBoost;
 
-  const center = getRectCenter(buttonRect);
+  const center = centerFromTopLeft(currentTopLeft, btnWidth, btnHeight);
+  const minSeparationFromCursor = Math.max(140, Math.min(vw, vh) * 0.32);
+  const minTravelFromCurrent = Math.max(90, Math.min(vw, vh) * 0.18);
+
+  let best: Point | null = null;
+  let bestScore = -1;
+
   const awayAngle = Math.atan2(center.y - cursor.y, center.x - cursor.x);
-  const escapeDistance = escapeMin + Math.random() * (escapeMax - escapeMin);
 
-  let targetX = center.x + Math.cos(awayAngle) * escapeDistance - buttonRect.width / 2;
-  let targetY = center.y + Math.sin(awayAngle) * escapeDistance - buttonRect.height / 2;
+  for (let i = 0; i < 12; i++) {
+    const angle =
+      i === 0
+        ? awayAngle
+        : awayAngle + (Math.random() - 0.5) * Math.PI * 0.9;
+    const dist = escapeMin + Math.random() * (escapeMax - escapeMin);
 
-  const jitter = Math.min(40, vw * 0.06);
-  targetX += (Math.random() - 0.5) * jitter * 2;
-  targetY += (Math.random() - 0.5) * jitter * 2;
+    let tx = center.x + Math.cos(angle) * dist - btnWidth / 2;
+    let ty = center.y + Math.sin(angle) * dist - btnHeight / 2;
 
-  return clampPosition(targetX, targetY, buttonRect.width, buttonRect.height, padding);
+    const candidate = clampPosition(tx, ty, btnWidth, btnHeight, options.safePadding);
+    const candCenter = centerFromTopLeft(candidate, btnWidth, btnHeight);
+    const distCursor = distance(candCenter, cursor);
+    const travel = distance(candCenter, center);
+
+    if (distCursor < minSeparationFromCursor || travel < minTravelFromCurrent) {
+      continue;
+    }
+
+    const score = distCursor + travel * 0.5;
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+
+  if (best) return best;
+
+  // Fallback: téléportation vers le quadrant opposé au doigt/souris
+  const relX = (cursor.x - bounds.offsetLeft) / vw;
+  const relY = (cursor.y - bounds.offsetTop) / vh;
+  const jumpX =
+    relX < 0.5
+      ? bounds.minX + (bounds.maxX - bounds.minX - btnWidth) * 0.82
+      : bounds.minX + (bounds.maxX - bounds.minX - btnWidth) * 0.05;
+  const jumpY =
+    relY < 0.5
+      ? bounds.minY + (bounds.maxY - bounds.minY - btnHeight) * 0.72
+      : bounds.minY + (bounds.maxY - bounds.minY - btnHeight) * 0.12;
+
+  return clampPosition(jumpX, jumpY, btnWidth, btnHeight, options.safePadding);
 }
 
 export function getInitialButtonPosition(

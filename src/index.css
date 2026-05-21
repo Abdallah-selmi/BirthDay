@@ -442,6 +442,16 @@ body {
   text-align: center;
 }
 
+.escape-button--dashing {
+  transition: box-shadow 0.2s ease;
+}
+
+.escape-button--dashing:active {
+  box-shadow:
+    0 0 50px rgba(251, 191, 36, 0.7),
+    0 0 80px rgba(236, 72, 153, 0.6);
+}
+
 .escape-button--catchable {
   cursor: pointer;
   animation: catchableGlow 1.5s ease-in-out infinite;

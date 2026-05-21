@@ -89,6 +89,7 @@ export function LandingPage({
         position={escape.position}
         catchable={escape.catchable}
         teaseMsg={escape.teaseMsg}
+        dashKey={escape.dashKey}
         onCatch={onCaught}
       />
     </motion.div>
