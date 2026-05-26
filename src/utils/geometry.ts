@@ -86,8 +86,13 @@ export function computeEscapePosition(
   const escapeMax = (options.escapeDistanceMax ?? defaultMax) + attemptBoost;
 
   const center = centerFromTopLeft(currentTopLeft, btnWidth, btnHeight);
-  const minSeparationFromCursor = Math.max(140, Math.min(vw, vh) * 0.32);
-  const minTravelFromCurrent = Math.max(90, Math.min(vw, vh) * 0.18);
+  const isNarrow = vw < 480;
+  const minSeparationFromCursor = isNarrow
+    ? Math.max(72, Math.min(vw, vh) * 0.2)
+    : Math.max(100, Math.min(vw, vh) * 0.26);
+  const minTravelFromCurrent = isNarrow
+    ? Math.max(48, Math.min(vw, vh) * 0.12)
+    : Math.max(72, Math.min(vw, vh) * 0.15);
 
   let best: Point | null = null;
   let bestScore = -1;

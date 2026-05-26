@@ -39,7 +39,7 @@ export function LandingPage({
 
   return (
     <motion.div
-      className={`landing-page scene-page ${screenShake || escape.screenShake ? 'screen-shake' : ''}`}
+      className={`landing-page scene-page scene-page--landing ${screenShake || escape.screenShake ? 'screen-shake' : ''}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

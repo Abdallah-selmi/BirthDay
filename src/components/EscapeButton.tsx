@@ -49,7 +49,9 @@ export function EscapeButton({
         whileTap={catchable ? { scale: 0.9 } : {}}
         layout={false}
       >
-        {catchable ? 'Catch Me Now 💕' : 'Click Me'}
+        <span className="escape-button__label">
+          {catchable ? 'Catch Me Now 💕' : 'Click Me'}
+        </span>
       </motion.button>
 
       {teaseMsg && (

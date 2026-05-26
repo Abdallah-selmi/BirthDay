@@ -81,16 +81,22 @@ export function getProximityThreshold(width: number): number {
 }
 
 export function getEscapeDistance(width: number): { min: number; max: number } {
+  if (width < BREAKPOINTS.sm) {
+    return { min: 70, max: 130 };
+  }
+  if (width < BREAKPOINTS.md) {
+    return { min: 90, max: 170 };
+  }
   const scale = Math.min(1.2, width / BREAKPOINTS.lg);
   return {
-    min: 150 + scale * 80,
-    max: 260 + scale * 140,
+    min: 120 + scale * 60,
+    max: 200 + scale * 120,
   };
 }
 
 export function getSafePadding(width: number): number {
-  if (width < BREAKPOINTS.sm) return 12;
-  if (width < BREAKPOINTS.md) return 16;
+  if (width < BREAKPOINTS.sm) return 16;
+  if (width < BREAKPOINTS.md) return 18;
   if (width < BREAKPOINTS.lg) return 20;
   return 24;
 }
@@ -113,17 +119,17 @@ export function getAdaptiveCounts(
 
   switch (tier) {
     case 'mobile-small':
-      return { hearts: 6, particles: 18, petals: 8, confetti: 35 };
+      return { hearts: 5, particles: 22, petals: 6, confetti: 30 };
     case 'mobile':
-      return { hearts: 8, particles: 28, petals: 12, confetti: 45 };
+      return { hearts: 7, particles: 35, petals: 10, confetti: 40 };
     case 'tablet':
       return { hearts: 10, particles: 36, petals: 14, confetti: 55 };
     case 'laptop':
       return { hearts: 12, particles: 44, petals: 16, confetti: 60 };
     case 'desktop':
-      return { hearts: 14, particles: 50, petals: 18, confetti: 65 };
+      return { hearts: 14, particles: 65, petals: 18, confetti: 65 };
     case 'ultrawide':
-      return { hearts: 16, particles: 58, petals: 22, confetti: 70 };
+      return { hearts: 16, particles: 70, petals: 22, confetti: 70 };
     default:
       return { hearts: 10, particles: 36, petals: 14, confetti: 55 };
   }

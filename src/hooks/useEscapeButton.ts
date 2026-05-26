@@ -46,6 +46,7 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
   configRef.current = config;
 
   const teaseTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastPointerRef = useRef(0);
 
   const escapeOpts = useCallback(
     (attempt: number): EscapeOptions => ({
@@ -110,6 +111,10 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
       return;
     }
 
+    const now = Date.now();
+    if (now - lastPointerRef.current < 32) return;
+    lastPointerRef.current = now;
+
     const rect = el.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
@@ -155,26 +160,36 @@ export function useEscapeButton({ enabled, config }: UseEscapeButtonOptions) {
   useEffect(() => {
     if (!enabled || catchable) return;
 
-    const onPointerMove = (e: PointerEvent) => {
-      triggerEscape({ x: e.clientX, y: e.clientY });
+    const handleProximity = (x: number, y: number) => {
+      triggerEscape({ x, y });
     };
 
-    const onTouchStart = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      if (touch) triggerEscape({ x: touch.clientX, y: touch.clientY });
+    const onPointerMove = (e: PointerEvent) => {
+      handleProximity(e.clientX, e.clientY);
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      handleProximity(e.clientX, e.clientY);
     };
 
     const onTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];
-      if (touch) triggerEscape({ x: touch.clientX, y: touch.clientY });
+      if (touch) handleProximity(touch.clientX, touch.clientY);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) handleProximity(touch.clientX, touch.clientY);
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: true });
 
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
     };

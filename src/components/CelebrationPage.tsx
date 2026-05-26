@@ -37,7 +37,7 @@ export function CelebrationPage({
 
   return (
     <motion.div
-      className="celebration-page scene-page"
+      className="celebration-page scene-page scene-page--celebration"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

@@ -22,20 +22,34 @@ export function generateFloatingItems(count: number): FloatingItem[] {
 
 const CONFETTI_COLORS = ['#f472b6', '#ec4899', '#fbbf24', '#fcd34d', '#fda4af', '#e879f9'];
 
-export function spawnConfetti(count = 60): () => void {
+function clamp(min: number, value: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function getConfettiCount(): number {
+  if (typeof window === 'undefined') return 50;
+  const w = window.innerWidth;
+  if (w < 480) return 30;
+  if (w < 768) return 40;
+  return 65;
+}
+
+export function spawnConfetti(count?: number): () => void {
+  const total = count ?? getConfettiCount();
   const elements: HTMLDivElement[] = [];
   const timeouts: ReturnType<typeof setTimeout>[] = [];
+  const maxDrift = Math.min(120, window.innerWidth * 0.28);
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < total; i++) {
     const el = document.createElement('div');
     el.className = 'confetti';
     el.textContent = i % 3 === 0 ? '❤️' : i % 3 === 1 ? '✨' : '🌹';
     el.style.left = `${Math.random() * 100}%`;
     el.style.top = '-24px';
     el.style.color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    el.style.fontSize = `${18 + Math.random() * 22}px`;
-    el.style.setProperty('--tx', `${Math.random() * 240 - 120}px`);
-    el.style.setProperty('--ty', '110vh');
+    el.style.fontSize = `${clamp(14, 18 + Math.random() * 16, 28)}px`;
+    el.style.setProperty('--tx', `${Math.random() * maxDrift * 2 - maxDrift}px`);
+    el.style.setProperty('--ty', '100dvh');
     el.style.setProperty('--rot', `${Math.random() * 720}deg`);
     el.style.animationDuration = `${2 + Math.random() * 1.5}s`;
     document.body.appendChild(el);
